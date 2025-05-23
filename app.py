@@ -17,12 +17,12 @@ TEMPLATES = {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VPN Биллинг</title>
+    <title>ASTRACAT VPN Биллинг</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
     <header class="bg-gray-800 p-4">
-        <h1 class="text-2xl font-bold">Xray VPN Биллинг</h1>
+        <h1 class="text-2xl font-bold">ASTRACAT VPN Биллинг</h1>
         <nav class="mt-2">
             <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
             {% if 'user_id' in session %}
@@ -39,13 +39,13 @@ TEMPLATES = {
     </header>
     <main class="flex-grow p-4">
         <div class="max-w-2xl mx-auto">
-            <h2 class="text-xl font-semibold mb-4">Добро пожаловать в Xray VPN!</h2>
-            <p class="mb-4">Подписка на Xray VPN за 75 рублей/месяц. Закажите сейчас и получите доступ к безопасному VPN с кастомным SNI.</p>
+            <h2 class="text-xl font-semibold mb-4">Добро пожаловать в ASTRACAT VPN!</h2>
+            <p class="mb-4">Подписка на ASTRACAT VPN за 75 рублей/месяц. Закажите сейчас и получите доступ к безопасному VPN с кастомным SNI.</p>
             <a href="{{ url_for('register') }}" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Начать</a>
         </div>
     </main>
     <footer class="bg-gray-800 p-4 text-center">
-        <p>© 2025 Xray VPN. Все права защищены.</p>
+        <p>© 2025 ASTRACAT VPN. Все права защищены.</p>
     </footer>
 </body>
 </html>
@@ -96,7 +96,7 @@ TEMPLATES = {
         </div>
     </main>
     <footer class="bg-gray-800 p-4 text-center">
-        <p>© 2025 Xray VPN. Все права защищены.</p>
+        <p>© 2025 ASTRACAT VPN. Все права защищены.</p>
     </footer>
 </body>
 </html>
@@ -143,7 +143,7 @@ TEMPLATES = {
         </div>
     </main>
     <footer class="bg-gray-800 p-4 text-center">
-        <p>© 2025 Xray VPN. Все права защищены.</p>
+        <p>© 2025 ASTRACAT VPN. Все права защищены.</p>
     </footer>
 </body>
 </html>
@@ -185,9 +185,14 @@ TEMPLATES = {
                     <input type="text" id="sni" name="sni" class="w-full p-2 bg-gray-800 rounded text-white">
                 </div>
                 <p class="mb-4">Цена: 75 рублей/месяц</p>
-                <p class="mb-4 text-sm text-gray-400">После оплаты (до 5 дней) вы получите код транзакции. Укажите его в комментарии к платежу на DonationAlerts.</p>
+                <p class="mb-4 text-sm text-gray-400">После создания транзакции вы получите код. Укажите его в комментарии к платежу на DonationAlerts. Платежи могут идти до 5 дней.</p>
                 <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Создать транзакцию</button>
             </form>
+            {% if transactions %}
+                <div class="mb-8">
+                    <a href="https://www.donationalerts.com/r/astracatinc" target="_blank" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded">Оплатить через DonationAlerts</a>
+                </div>
+            {% endif %}
             <h3 class="text-lg font-semibold mb-2">Ваши транзакции</h3>
             <ul class="mb-8">
                 {% for t in transactions %}
@@ -206,7 +211,7 @@ TEMPLATES = {
         </div>
     </main>
     <footer class="bg-gray-800 p-4 text-center">
-        <p>© 2025 Xray VPN. Все права защищены.</p>
+        <p>© 2025 ASTRACAT VPN. Все права защищены.</p>
     </footer>
 </body>
 </html>
@@ -311,7 +316,60 @@ TEMPLATES = {
         </div>
     </main>
     <footer class="bg-gray-800 p-4 text-center">
-        <p>© 2025 Xray VPN. Все права защищены.</p>
+        <p>© 2025 ASTRACAT VPN. Все права защищены.</p>
+    </footer>
+</body>
+</html>
+''',
+    'admin_login.html': '''
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в админ-панель</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4">
+        <h1 class="text-2xl font-bold">Вход в админ-панель</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
+            {% if 'user_id' in session %}
+                <a href="{{ url_for('dashboard') }}" class="text-blue-400 hover:text-blue-300 mr-4">Панель</a>
+                <a href="{{ url_for('logout') }}" class="text-blue-400 hover:text-blue-300">Выйти</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="text-blue-400 hover:text-blue-300 mr-4">Вход</a>
+                <a href="{{ url_for('register') }}" class="text-blue-400 hover:text-blue-300">Регистрация</a>
+            {% endif %}
+        </nav>
+    </header>
+    <main class="flex-grow p-4">
+        <div class="max-w-md mx-auto">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="bg-red-600 p-2 rounded mb-4">
+                        {% for message in messages %}
+                            <p>{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{{ url_for('admin_login') }}">
+                <div class="mb-4">
+                    <label for="admin_username" class="block mb-2">Имя администратора:</label>
+                    <input type="text" id="admin_username" name="admin_username" required class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <div class="mb-4">
+                    <label for="admin_password" class="block mb-2">Пароль:</label>
+                    <input type="password" id="admin_password" name="admin_password" required class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Войти</button>
+            </form>
+        </div>
+    </main>
+    <footer class="bg-gray-800 p-4 text-center">
+        <p>© 2025 ASTRACAT VPN. Все права защищены.</p>
     </footer>
 </body>
 </html>
@@ -327,7 +385,7 @@ TEMPLATES = {
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
     <header class="bg-gray-800 p-4">
-        <h1 class="text-2xl font-bold">Инструкции по настройке Xray VPN</h1>
+        <h1 class="text-2xl font-bold">Инструкции по настройке ASTRACAT VPN</h1>
         <nav class="mt-2">
             <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
             {% if 'user_id' in session %}
@@ -340,17 +398,17 @@ TEMPLATES = {
     </header>
     <main class="flex-grow p-4">
         <div class="max-w-2xl mx-auto">
-            <h2 class="text-xl font-semibold mb-4">Как настроить Xray VPN</h2>
+            <h2 class="text-xl font-semibold mb-4">Как настроить ASTRACAT VPN</h2>
             <p class="mb-4">1. После оплаты (до 5 дней) и выполнения заказа (до 3 дней) вы получите ссылку на VPN в панели пользователя.</p>
-            <p class="mb-4">2. Скачайте клиент Xray для вашей платформы (Windows, macOS, Linux, Android, iOS).</p>
-            <p class="mb-4">3. Импортируйте полученную ссылку в клиент Xray.</p>
+            <p class="mb-4">2. Скачайте клиент ASTRACAT VPN для вашей платформы (Windows, macOS, Linux, Android, iOS).</p>
+            <p class="mb-4">3. Импортируйте полученную ссылку в клиент ASTRACAT VPN.</p>
             <p class="mb-4">4. Если вы указали кастомный SNI, он будет включен в конфигурацию.</p>
             <p class="mb-4">5. Подключитесь к VPN и наслаждайтесь безопасным интернетом!</p>
             <p class="mb-4">Примечание: Если возникнут проблемы, свяжитесь с поддержкой через DonationAlerts.</p>
         </div>
     </main>
     <footer class="bg-gray-800 p-4 text-center">
-        <p>© 2025 Xray VPN. Все права защищены.</p>
+        <p>© 2025 ASTRACAT VPN. Все права защищены.</p>
     </footer>
 </body>
 </html>
@@ -440,11 +498,31 @@ def login():
         if user and check_password_hash(user[2], password):
             session['user_id'] = user[0]
             session['username'] = user[1]
-            session['is_admin'] = username == 'admin'
             flash('Вход выполнен успешно!')
             return redirect(url_for('dashboard'))
         flash('Неверное имя пользователя или пароль.')
     return render_template_string(TEMPLATES['login.html'])
+
+# Вход в админ-панель
+@app.route('/admin', methods=['GET'])
+def admin():
+    return render_template_string(TEMPLATES['admin_login.html'])
+
+@app.route('/admin_login', methods=['POST'])
+def admin_login():
+    admin_username = request.form['admin_username']
+    admin_password = request.form['admin_password']
+    conn = sqlite3.connect('billing.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = ?", (admin_username,))
+    user = c.fetchone()
+    conn.close()
+    if user and check_password_hash(user[2], admin_password) and admin_username == 'admin':
+        session['is_admin'] = True
+        flash('Вход в админ-панель выполнен успешно!')
+        return redirect(url_for('admin_panel'))
+    flash('Неверное имя администратора или пароль.')
+    return redirect(url_for('admin'))
 
 # Выход
 @app.route('/logout')
@@ -500,11 +578,11 @@ def create_transaction():
     return redirect(url_for('dashboard'))
 
 # Админ-панель
-@app.route('/admin')
+@app.route('/admin_panel')
 def admin_panel():
-    if 'user_id' not in session or not session.get('is_admin'):
-        flash('Доступ запрещен.')
-        return redirect(url_for('index'))
+    if 'is_admin' not in session or not session.get('is_admin'):
+        flash('Пожалуйста, войдите как администратор.')
+        return redirect(url_for('admin'))
     
     conn = sqlite3.connect('billing.db')
     c = conn.cursor()
@@ -519,9 +597,9 @@ def admin_panel():
 # Обновление статуса транзакции
 @app.route('/admin/update_transaction/<int:transaction_id>', methods=['POST'])
 def update_transaction(transaction_id):
-    if 'user_id' not in session or not session.get('is_admin'):
-        flash('Доступ запрещен.')
-        return redirect(url_for('index'))
+    if 'is_admin' not in session or not session.get('is_admin'):
+        flash('Пожалуйста, войдите как администратор.')
+        return redirect(url_for('admin'))
     
     status = request.form['status']
     conn = sqlite3.connect('billing.db')
@@ -535,9 +613,9 @@ def update_transaction(transaction_id):
 # Обновление заказа
 @app.route('/admin/update_order/<int:order_id>', methods=['POST'])
 def update_order(order_id):
-    if 'user_id' not in session or not session.get('is_admin'):
-        flash('Доступ запрещен.')
-        return redirect(url_for('index'))
+    if 'is_admin' not in session or not session.get('is_admin'):
+        flash('Пожалуйста, войдите как администратор.')
+        return redirect(url_for('admin'))
     
     vpn_link = request.form['vpn_link']
     status = request.form['status']

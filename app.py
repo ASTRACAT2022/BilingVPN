@@ -3,224 +3,556 @@ import sqlite3
 import random
 import string
 from datetime import datetime
-from flask import Flask, render_template_string, request, redirect, url_for, session, g
+from flask import Flask, request, render_template_string, redirect, url_for, session, flash
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey123'
-DATABASE = 'billing.db'
+app.secret_key = 'supersecretkey123'  # Замени на безопасный ключ в продакшене
 
-# Генерация случайного кода транзакции
-def generate_code(length=8):
-    chars = string.ascii_uppercase + string.digits
-    return ''.join(random.choice(chars) for _ in range(length))
+# HTML-шаблоны как строки
+TEMPLATES = {
+    'index.html': '''
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Биллинг</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4">
+        <h1 class="text-2xl font-bold">Xray VPN Биллинг</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
+            {% if 'user_id' in session %}
+                <a href="{{ url_for('dashboard') }}" class="text-blue-400 hover:text-blue-300 mr-4">Панель</a>
+                {% if session.get('is_admin') %}
+                    <a href="{{ url_for('admin_panel') }}" class="text-blue-400 hover:text-blue-300 mr-4">Админ</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="text-blue-400 hover:text-blue-300">Выйти</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="text-blue-400 hover:text-blue-300 mr-4">Вход</a>
+                <a href="{{ url_for('register') }}" class="text-blue-400 hover:text-blue-300">Регистрация</a>
+            {% endif %}
+        </nav>
+    </header>
+    <main class="flex-grow p-4">
+        <div class="max-w-2xl mx-auto">
+            <h2 class="text-xl font-semibold mb-4">Добро пожаловать в Xray VPN!</h2>
+            <p class="mb-4">Подписка на Xray VPN за 75 рублей/месяц. Закажите сейчас и получите доступ к безопасному VPN с кастомным SNI.</p>
+            <a href="{{ url_for('register') }}" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Начать</a>
+        </div>
+    </main>
+    <footer class="bg-gray-800 p-4 text-center">
+        <p>© 2025 Xray VPN. Все права защищены.</p>
+    </footer>
+</body>
+</html>
+''',
+    'register.html': '''
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4">
+        <h1 class="text-2xl font-bold">Регистрация</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
+            <a href="{{ url_for('login') }}" class="text-blue-400 hover:text-blue-300">Вход</a>
+        </nav>
+    </header>
+    <main class="flex-grow p-4">
+        <div class="max-w-md mx-auto">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="bg-red-600 p-2 rounded mb-4">
+                        {% Cumberland_1st_pos="1">{% for message in messages %}
+                            <p>{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{{ url_for('register') }}">
+                <div class="mb-4">
+                    <label for="username" class="block mb-2">Имя пользователя:</label>
+                    <input type="text" id="username" name="username" required class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <div class="mb-4">
+                    <label for="password" class="block mb-2">Пароль:</label>
+                    <input type="password" id="password" name="password" required class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <div class="mb-4">
+                    <label for="wallet" class="block mb-2">Кошелек (для выплат):</label>
+                    <input type="text" id="wallet" name="wallet" required class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Зарегистрироваться</button>
+            </form>
+        </div>
+    </main>
+    <footer class="bg-gray-800 p-4 text-center">
+        <p>© 2025 Xray VPN. Все права защищены.</p>
+    </footer>
+</body>
+</html>
+''',
+    'login.html': '''
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4">
+        <h1 class="text-2xl font-bold">Вход</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
+            <a href="{{ url_for('register') }}" class="text-blue-400 hover:text-blue-300">Регистрация</a>
+        </nav>
+    </header>
+    <main class="flex-grow p-4">
+        <div class="max-w-md mx-auto">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="bg-red-600 p-2 rounded mb-4">
+                        {% for message in messages %}
+                            <p>{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="mb-4">
+                    <label for="username" class="block mb-2">Имя пользователя:</label>
+                    <input type="text" id="username" name="username" required class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <div class="mb-4">
+                    <label for="password" class="block mb-2">Пароль:</label>
+                    <input type="password" id="password" name="password" required class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Войти</button>
+            </form>
+        </div>
+    </main>
+    <footer class="bg-gray-800 p-4 text-center">
+        <p>© 2025 Xray VPN. Все права защищены.</p>
+    </footer>
+</body>
+</html>
+''',
+    'dashboard.html': '''
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель пользователя</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4">
+        <h1 class="text-2xl font-bold">Панель пользователя</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
+            <a href="{{ url_for('instructions') }}" class="text-blue-400 hover:text-blue-300 mr-4">Инструкции</a>
+            <a href="{{ url_for('logout') }}" class="text-blue-400 hover:text-blue-300">Выйти</a>
+        </nav>
+    </header>
+    <main class="flex-grow p-4">
+        <div class="max-w-2xl mx-auto">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="bg-blue-600 p-2 rounded mb-4">
+                        {% for message in messages %}
+                            <p>{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            <h2 class="text-xl font-semibold mb-4">Привет, {{ user[1] }}!</h2>
+            <p class="mb-4">Кошелек: {{ user[3] }}</p>
+            <form method="POST" action="{{ url_for('create_transaction') }}" class="mb-8">
+                <div class="mb-4">
+                    <label for="sni" class="block mb-2">Кастомный SNI (опционально):</label>
+                    <input type="text" id="sni" name="sni" class="w-full p-2 bg-gray-800 rounded text-white">
+                </div>
+                <p class="mb-4">Цена: 75 рублей/месяц</p>
+                <p class="mb-4 text-sm text-gray-400">После оплаты (до 5 дней) вы получите код транзакции. Укажите его в комментарии к платежу на DonationAlerts.</p>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded">Создать транзакцию</button>
+            </form>
+            <h3 class="text-lg font-semibold mb-2">Ваши транзакции</h3>
+            <ul class="mb-8">
+                {% for t in transactions %}
+                    <li class="mb-2">Код: {{ t[2] }} | Сумма: {{ t[3] }} руб | Статус: {{ t[4] }} | Создано: {{ t[5] }}</li>
+                {% endfor %}
+            </ul>
+            <h3 class="text-lg font-semibold mb-2">Ваши заказы</h3>
+            <ul>
+                {% for o in orders %}
+                    <li class="mb-2">
+                        Заказ #{{ o[0] }} | SNI: {{ o[3] or 'Нет' }} | Ссылка: {{ o[4] or 'Ожидает' }} | 
+                        Статус: {{ o[5] }} | Создано: {{ o[6] }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </main>
+    <footer class="bg-gray-800 p-4 text-center">
+        <p>© 2025 Xray VPN. Все права защищены.</p>
+    </footer>
+</body>
+</html>
+''',
+    'admin.html': '''
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4">
+        <h1 class="text-2xl font-bold">Админ-панель</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
+            <a href="{{ url_for('logout') }}" class="text-blue-400 hover:text-blue-300">Выйти</a>
+        </nav>
+    </header>
+    <main class="flex-grow p-4">
+        <div class="max-w-4xl mx-auto">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="bg-blue-600 p-2 rounded mb-4">
+                        {% for message in messages %}
+                            <p>{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            <h2 class="text-xl font-semibold mb-4">Транзакции</h2>
+            <table class="w-full mb-8 bg-gray-800 rounded">
+                <thead>
+                    <tr>
+                        <th class="p-2">ID</th>
+                        <th class="p-2">Пользователь</th>
+                        <th class="p-2">Код</th>
+                        <th class="p-2">Сумма</th>
+                        <th class="p-2">Статус</th>
+                        <th class="p-2">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transactions %}
+                        <tr>
+                            <td class="p-2">{{ t[0] }}</td>
+                            <td class="p-2">{{ t[5] }}</td>
+                            <td class="p-2">{{ t[2] }}</td>
+                            <td class="p-2">{{ t[3] }} руб</td>
+                            <td class="p-2">{{ t[4] }}</td>
+                            <td class="p-2">
+                                <form method="POST" action="{{ url_for('update_transaction', transaction_id=t[0]) }}">
+                                    <select name="status" class="bg-gray-700 text-white p-1 rounded">
+                                        <option value="pending" {% if t[4] == 'pending' %}selected{% endif %}>Ожидает</option>
+                                        <option value="completed" {% if t[4] == 'completed' %}selected{% endif %}>Завершено</option>
+                                        <option value="failed" {% if t[4] == 'failed' %}selected{% endif %}>Отклонено</option>
+                                    </select>
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Обновить</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <h2 class="text-xl font-semibold mb-4">Заказы</h2>
+            <table class="w-full bg-gray-800 rounded">
+                <thead>
+                    <tr>
+                        <th class="p-2">ID</th>
+                        <th class="p-2">Пользователь</th>
+                        <th class="p-2">SNI</th>
+                        <th class="p-2">Ссылка VPN</th>
+                        <th class="p-2">Статус</th>
+                        <th class="p-2">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for o in orders %}
+                        <tr>
+                            <td class="p-2">{{ o[0] }}</td>
+                            <td class="p-2">{{ o[7] }}</td>
+                            <td class="p-2">{{ o[3] or 'Нет' }}</td>
+                            <td class="p-2">{{ o[4] or 'Ожидает' }}</td>
+                            <td class="p-2">{{ o[5] }}</td>
+                            <td class="p-2">
+                                <form method="POST" action="{{ url_for('update_order', order_id=o[0]) }}">
+                                    <input type="text" name="vpn_link" value="{{ o[4] or '' }}" class="bg-gray-700 text-white p-1 rounded mb-2 w-full" placeholder="VPN ссылка">
+                                    <select name="status" class="bg-gray-700 text-white p-1 rounded mb-2 w-full">
+                                        <option value="pending" {% if o[5] == 'pending' %}selected{% endif %}>Ожидает</option>
+                                        <option value="completed" {% if o[5] == 'completed' %}selected{% endif %}>Завершено</option>
+                                        <option value="failed" {% if o[5] == 'failed' %}selected{% endif %}>Отклонено</option>
+                                    </select>
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Обновить</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+    <footer class="bg-gray-800 p-4 text-center">
+        <p>© 2025 Xray VPN. Все права защищены.</p>
+    </footer>
+</body>
+</html>
+''',
+    'instructions.html': '''
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Инструкции по настройке</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4">
+        <h1 class="text-2xl font-bold">Инструкции по настройке Xray VPN</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="text-blue-400 hover:text-blue-300 mr-4">Главная</a>
+            {% if 'user_id' in session %}
+                <a href="{{ url_for('dashboard') }}" class="text-blue-400 hover:text-blue-300 mr-4">Панель</a>
+                <a href="{{ url_for('logout') }}" class="text-blue-400 hover:text-blue-300">Выйти</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="text-blue-400 hover:text-blue-300">Вход</a>
+            {% endif %}
+        </nav>
+    </header>
+    <main class="flex-grow p-4">
+        <div class="max-w-2xl mx-auto">
+            <h2 class="text-xl font-semibold mb-4">Как настроить Xray VPN</h2>
+            <p class="mb-4">1. После оплаты (до 5 дней) и выполнения заказа (до 3 дней) вы получите ссылку на VPN в панели пользователя.</p>
+            <p class="mb-4">2. Скачайте клиент Xray для вашей платформы (Windows, macOS, Linux, Android, iOS).</p>
+            <p class="mb-4">3. Импортируйте полученную ссылку в клиент Xray.</p>
+            <p class="mb-4">4. Если вы указали кастомный SNI, он будет включен в конфигурацию.</p>
+            <p class="mb-4">5. Подключитесь к VPN и наслаждайтесь безопасным интернетом!</p>
+            <p class="mb-4">Примечание: Если возникнут проблемы, свяжитесь с поддержкой через DonationAlerts.</p>
+        </div>
+    </main>
+    <footer class="bg-gray-800 p-4 text-center">
+        <p>© 2025 Xray VPN. Все права защищены.</p>
+    </footer>
+</body>
+</html>
+'''
+}
 
-# Инициализация БД
+# Инициализация базы данных
 def init_db():
-    with app.app_context():
-        db = get_db()
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                code TEXT UNIQUE,
-                amount INTEGER,
-                donation_status TEXT,
-                user_wallet TEXT,
-                custom_sni TEXT,
-                order_status TEXT,
-                config_link TEXT,
-                created_at DATETIME,
-                confirmed_at DATETIME,
-                completed_at DATETIME
-            )
-        ''')
-        db.commit()
-
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-    return db
-
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+    conn = sqlite3.connect('billing.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        wallet TEXT
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        transaction_code TEXT UNIQUE,
+        amount REAL,
+        status TEXT,
+        created_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        transaction_id INTEGER,
+        sni TEXT,
+        vpn_link TEXT,
+        status TEXT,
+        created_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+    )''')
+    # Создаем админа, если его нет
+    c.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not c.fetchone():
+        c.execute("INSERT INTO users (username, password, wallet) VALUES (?, ?, ?)",
+                 ('admin', generate_password_hash('admin123'), 'admin_wallet'))
+    conn.commit()
+    conn.close()
 
 init_db()
 
-# Стили и шаблоны
-common_style = '''
-<style>
-    :root { --primary: #7928CA; --secondary: #FF0080; --dark: #0a0a0a; }
-    * { box-sizing: border-box; margin: 0; font-family: 'Inter', sans-serif; }
-    body { background: var(--dark); color: white; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-    .card { background: #1a1a1a; border-radius: 12px; padding: 2rem; margin: 2rem 0; }
-    .gradient-text { background: linear-gradient(45deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .btn { background: linear-gradient(45deg, var(--primary), var(--secondary)); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; display: inline-block; transition: transform 0.2s; }
-    .btn:hover { transform: translateY(-2px); }
-    table { width: 100%; border-collapse: collapse; margin: 2rem 0; }
-    th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #333; }
-</style>
-'''
+# Генерация случайного кода транзакции
+def generate_transaction_code():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
-home_template = common_style + '''
-<div class="container">
-    <h1 class="gradient-text">Xray VPN Service</h1>
-    <div class="card">
-        <h2>Инструкция по подключению:</h2>
-        <p>1. Приобретите подписку</p>
-        <p>2. После подтверждения платежа получите конфиг</p>
-        <p>3. Настройте Xray клиент по инструкции ниже</p>
-        <a href="/buy" class="btn">Купить подписку - 75₽/мес</a>
-    </div>
-    
-    <div class="card">
-        <h2>Настройка клиента Xray</h2>
-        <pre><code>{
-  "inbounds": [...],
-  "outbounds": [...]
-}</code></pre>
-    </div>
-</div>
-'''
-
-purchase_template = common_style + '''
-<div class="container">
-    <h1 class="gradient-text">Оформление подписки</h1>
-    <div class="card">
-        <h2>Ваш код транзакции: <span style="color: #FF0080">{{ code }}</span></h2>
-        <p>1. Перейдите на <a href="https://www.donationalerts.com/r/astracatinc" target="_blank" style="color: #7928CA">DonationAlerts</a></p>
-        <p>2. Укажите сумму 75₽</p>
-        <p>3. В комментарии укажите код: <strong>{{ code }}</strong></p>
-        <p>После подтверждения платежа администратором (до 5 дней), вы сможете получить конфиг.</p>
-        <a href="/order/{{ code }}" class="btn">Проверить статус</a>
-    </div>
-</div>
-'''
-
-order_template = common_style + '''
-<div class="container">
-    <h1 class="gradient-text">Статус заказа: {{ transaction["code"] }}</h1>
-    <div class="card">
-        {% if transaction["donation_status"] == "confirmed" %}
-            <h2>✅ Платеж подтвержден!</h2>
-            {% if not transaction["user_wallet"] %}
-                <form method="POST">
-                    <input type="text" name="wallet" placeholder="Ваш кошелек" required>
-                    <input type="text" name="sni" placeholder="Кастомный SNI (опционально)">
-                    <button type="submit" class="btn">Отправить данные</button>
-                </form>
-            {% elif transaction["order_status"] == "completed" %}
-                <a href="{{ transaction['config_link'] }}" class="btn">Скачать конфиг</a>
-            {% else %}
-                <p>Статус заказа: {{ transaction["order_status"] }} ⏳</p>
-            {% endif %}
-        {% else %}
-            <h2>⏳ Ожидание подтверждения платежа</h2>
-            <p>Проверяем статус каждые 5 минут...</p>
-        {% endif %}
-    </div>
-</div>
-'''
-
-admin_template = common_style + '''
-<div class="container">
-    <h1 class="gradient-text">Админ панель</h1>
-    <table>
-        <tr>
-            <th>Код</th>
-            <th>Статус</th>
-            <th>Кошелек</th>
-            <th>SNI</th>
-            <th>Действия</th>
-        </tr>
-        {% for t in transactions %}
-        <tr>
-            <td>{{ t["code"] }}</td>
-            <td>{{ t["donation_status"] }}</td>
-            <td>{{ t["user_wallet"] or '—' }}</td>
-            <td>{{ t["custom_sni"] or '—' }}</td>
-            <td>
-                {% if t["donation_status"] == "pending" %}
-                    <a href="/admin/confirm/{{ t['code'] }}" class="btn">Подтвердить</a>
-                {% elif t["order_status"] != "completed" %}
-                    <form method="POST" action="/admin/complete/{{ t['code'] }}">
-                        <input type="text" name="config_link" placeholder="Ссылка на конфиг" required>
-                        <button type="submit" class="btn">Завершить</button>
-                    </form>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-'''
-
-# Роуты
+# Главная страница
 @app.route('/')
 def index():
-    return render_template_string(home_template)
+    return render_template_string(TEMPLATES['index.html'])
 
-@app.route('/buy')
-def buy():
-    code = generate_code()
-    db = get_db()
-    db.execute('INSERT INTO transactions (code, amount, donation_status, created_at) VALUES (?, ?, ?, ?)',
-              (code, 75, 'pending', datetime.now()))
-    db.commit()
-    return render_template_string(purchase_template, code=code)
-
-@app.route('/order/<code>', methods=['GET', 'POST'])
-def order(code):
-    db = get_db()
+# Регистрация
+@app.route('/register', methods=['GET', 'POST'])
+def register():
     if request.method == 'POST':
-        db.execute('UPDATE transactions SET user_wallet = ?, custom_sni = ? WHERE code = ?',
-                  (request.form['wallet'], request.form.get('sni'), code))
-        db.commit()
-    
-    t = db.execute('SELECT * FROM transactions WHERE code = ?', (code,)).fetchone()
-    return render_template_string(order_template, transaction=t)
+        username = request.form['username']
+        password = request.form['password']
+        wallet = request.form['wallet']
+        conn = sqlite3.connect('billing.db')
+        c = conn.cursor()
+        try:
+            c.execute("INSERT INTO users (username, password, wallet) VALUES (?, ?, ?)",
+                     (username, generate_password_hash(password), wallet))
+            conn.commit()
+            flash('Регистрация успешна! Войдите в систему.')
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            flash('Имя пользователя уже занято.')
+        conn.close()
+    return render_template_string(TEMPLATES['register.html'])
 
-@app.route('/admin', methods=['GET', 'POST'])
-def admin():
+# Вход
+@app.route('/login', methods=['GET', 'POST'])
+def login():
     if request.method == 'POST':
-        if request.form['password'] == 'admin123':
-            session['admin'] = True
-            return redirect('/admin/dashboard')
-    return render_template_string(admin_template)
+        username = request.form['username']
+        password = request.form['password']
+        conn = sqlite3.connect('billing.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = c.fetchone()
+        conn.close()
+        if user and check_password_hash(user[2], password):
+            session['user_id'] = user[0]
+            session['username'] = user[1]
+            session['is_admin'] = username == 'admin'
+            flash('Вход выполнен успешно!')
+            return redirect(url_for('dashboard'))
+        flash('Неверное имя пользователя или пароль.')
+    return render_template_string(TEMPLATES['login.html'])
 
-@app.route('/admin/dashboard')
-def admin_dashboard():
-    if not session.get('admin'):
-        return redirect('/admin')
-    
-    db = get_db()
-    transactions = db.execute('SELECT * FROM transactions').fetchall()
-    return render_template_string(admin_template, transactions=transactions)
+# Выход
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Вы вышли из системы.')
+    return redirect(url_for('index'))
 
-@app.route('/admin/confirm/<code>')
-def confirm(code):
-    if not session.get('admin'):
-        return redirect('/admin')
+# Панель пользователя
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' not in session:
+        flash('Пожалуйста, войдите в систему.')
+        return redirect(url_for('login'))
     
-    db = get_db()
-    db.execute('UPDATE transactions SET donation_status = "confirmed" WHERE code = ?', (code,))
-    db.commit()
-    return redirect('/admin/dashboard')
+    conn = sqlite3.connect('billing.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],))
+    user = c.fetchone()
+    
+    c.execute("SELECT * FROM transactions WHERE user_id = ?", (session['user_id'],))
+    transactions = c.fetchall()
+    c.execute("SELECT * FROM orders WHERE user_id = ?", (session['user_id'],))
+    orders = c.fetchall()
+    conn.close()
+    
+    return render_template_string(TEMPLATES['dashboard.html'], user=user, transactions=transactions, orders=orders)
 
-@app.route('/admin/complete/<code>', methods=['POST'])
-def complete(code):
-    if not session.get('admin'):
-        return redirect('/admin')
+# Создание транзакции
+@app.route('/create_transaction', methods=['POST'])
+def create_transaction():
+    if 'user_id' not in session:
+        flash('Пожалуйста, войдите в систему.')
+        return redirect(url_for('login'))
     
-    db = get_db()
-    db.execute('UPDATE transactions SET order_status = "completed", config_link = ? WHERE code = ?',
-              (request.form['config_link'], code))
-    db.commit()
-    return redirect('/admin/dashboard')
+    sni = request.form.get('sni', '')
+    amount = 75.00
+    transaction_code = generate_transaction_code()
+    created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    conn = sqlite3.connect('billing.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO transactions (user_id, transaction_code, amount, status, created_at) VALUES (?, ?, ?, ?, ?)",
+             (session['user_id'], transaction_code, amount, 'pending', created_at))
+    transaction_id = c.lastrowid
+    
+    c.execute("INSERT INTO orders (user_id, transaction_id, sni, status, created_at) VALUES (?, ?, ?, ?, ?)",
+             (session['user_id'], transaction_id, sni, 'pending', created_at))
+    conn.commit()
+    conn.close()
+    
+    flash(f'Транзакция создана! Код: {transaction_code}. Укажите его в комментарии к платежу на DonationAlerts.')
+    return redirect(url_for('dashboard'))
+
+# Админ-панель
+@app.route('/admin')
+def admin_panel():
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Доступ запрещен.')
+        return redirect(url_for('index'))
+    
+    conn = sqlite3.connect('billing.db')
+    c = conn.cursor()
+    c.execute("SELECT t.*, u.username FROM transactions t JOIN users u ON t.user_id = u.id")
+    transactions = c.fetchall()
+    c.execute("SELECT o.*, u.username FROM orders o JOIN users u ON o.user_id = u.id")
+    orders = c.fetchall()
+    conn.close()
+    
+    return render_template_string(TEMPLATES['admin.html'], transactions=transactions, orders=orders)
+
+# Обновление статуса транзакции
+@app.route('/admin/update_transaction/<int:transaction_id>', methods=['POST'])
+def update_transaction(transaction_id):
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Доступ запрещен.')
+        return redirect(url_for('index'))
+    
+    status = request.form['status']
+    conn = sqlite3.connect('billing.db')
+    c = conn.cursor()
+    c.execute("UPDATE transactions SET status = ? WHERE id = ?", (status, transaction_id))
+    conn.commit()
+    conn.close()
+    flash('Статус транзакции обновлен.')
+    return redirect(url_for('admin_panel'))
+
+# Обновление заказа
+@app.route('/admin/update_order/<int:order_id>', methods=['POST'])
+def update_order(order_id):
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Доступ запрещен.')
+        return redirect(url_for('index'))
+    
+    vpn_link = request.form['vpn_link']
+    status = request.form['status']
+    conn = sqlite3.connect('billing.db')
+    c = conn.cursor()
+    c.execute("UPDATE orders SET vpn_link = ?, status = ? WHERE id = ?", (vpn_link, status, order_id))
+    conn.commit()
+    conn.close()
+    flash('Заказ обновлен.')
+    return redirect(url_for('admin_panel'))
+
+# Инструкции
+@app.route('/instructions')
+def instructions():
+    return render_template_string(TEMPLATES['instructions.html'])
 
 if __name__ == '__main__':
-      app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

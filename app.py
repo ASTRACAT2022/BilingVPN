@@ -203,7 +203,8 @@ TEMPLATES = {
             <ul>
                 {% for o in orders %}
                     <li class="mb-2">
-                        Заказ #{{ o[0] }} | SNI: {{ o[3] or 'Нет' }} | Ссылка: {{ o[4] or 'Ожидает' }} | 
+                        Заказ #{{ o[0] }} | SNI: {{ o[3] or 'Нет' }} | 
+                        Ссылка: {% if o[5] == 'completed' and o[4] %}<a href="{{ o[4] }}" target="_blank" class="text-blue-400 hover:text-blue-300">{{ o[4] }}</a>{% else %}Ожидает{% endif %} | 
                         Статус: {{ o[5] }} | Создано: {{ o[6] }}
                     </li>
                 {% endfor %}
@@ -300,7 +301,7 @@ TEMPLATES = {
                             <td class="p-2">{{ o[5] }}</td>
                             <td class="p-2">
                                 <form method="POST" action="{{ url_for('update_order', order_id=o[0]) }}">
-                                    <input type="text" name="vpn_link" value="{{ o[4] or '' }}" class="bg-gray-700 text-white p-1 rounded mb-2 w-full" placeholder="VPN ссылка">
+                                    <input type="text" name="vpn_link" value="{{ o[4] or '' }}" class="bg-gray-700 text-white p-1 rounded mb-2 w-full" placeholder="Введите ссылку на VPN">
                                     <select name="status" class="bg-gray-700 text-white p-1 rounded mb-2 w-full">
                                         <option value="pending" {% if o[5] == 'pending' %}selected{% endif %}>Ожидает</option>
                                         <option value="completed" {% if o[5] == 'completed' %}selected{% endif %}>Завершено</option>
@@ -617,7 +618,7 @@ def update_order(order_id):
         flash('Пожалуйста, войдите как администратор.')
         return redirect(url_for('admin'))
     
-    vpn_link = request.form['vpn_link']
+    vpn_link = request.form['vpn_link'].strip() or None  # Убираем пробелы, устанавливаем None, если пусто
     status = request.form['status']
     conn = sqlite3.connect('billing.db')
     c = conn.cursor()

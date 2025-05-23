@@ -72,7 +72,7 @@ TEMPLATES = {
             {% with messages = get_flashed_messages() %}
                 {% if messages %}
                     <div class="bg-red-600 p-2 rounded mb-4">
-                        {% Cumberland_1st_pos="1">{% for message in messages %}
+                        {% for message in messages %}
                             <p>{{ message }}</p>
                         {% endfor %}
                     </div>
